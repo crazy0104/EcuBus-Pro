@@ -360,6 +360,18 @@ export const layoutMap: Record<string, LayoutItem> = {
     component: defineAsyncComponent(() => import('./someip/si.vue')),
     icon: interIcon
   },
+  seriali: {
+    i: 'IA',
+    x: 0,
+    y: 0,
+    w: 500,
+    h: 350,
+    label: 'IA',
+    labelKey: 'uds.windows.seriali',
+    key: 'IA',
+    component: defineAsyncComponent(() => import('./ia/seriali.vue')),
+    icon: interIcon
+  },
   osTrace: {
     i: 'OSTrace',
     x: 0,

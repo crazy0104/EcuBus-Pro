@@ -126,6 +126,7 @@ import nodeIcon from '@iconify/icons-material-symbols/variables-outline-rounded'
 import { useProjectStore } from '@r/stores/project'
 import soaIcon from '@iconify/icons-material-symbols/linked-services-outline'
 import replayIcon from '@iconify/icons-material-symbols/replay'
+import usbIcon from '@iconify/icons-material-symbols/usb'
 import i18next from 'i18next'
 import { NodeItem, Inter, LogItem, ReplayItem } from 'src/preload/data'
 import { cloneDeep } from 'lodash'
@@ -247,6 +248,22 @@ function addChild(parent: Tree) {
         c.children.push(cc)
       }
     }
+  } else if (parent.type == 'serial') {
+    for (const key of Object.keys(dataBase.devices)) {
+      const item = dataBase.devices[key]
+      if (item.type == 'serial' && item.serialDevice) {
+        const cc: Tree = {
+          type: 'device',
+          label: item.serialDevice.name,
+          canAdd: false,
+          children: [],
+          icon: deviceIcon,
+          contextMenu: true,
+          id: key
+        }
+        c.children.push(cc)
+      }
+    }
   }
   parent.children.push(c)
   //interactive
@@ -310,6 +327,22 @@ function addChild(parent: Tree) {
     for (const key of Object.keys(dataBase.ia)) {
       const item = dataBase.ia[key]
       if (item.type == 'someip') {
+        const cc: Tree = {
+          type: 'interactive',
+          label: item.name,
+          canAdd: false,
+          children: [],
+          icon: interIcon,
+          contextMenu: true,
+          id: key
+        }
+        i.children.push(cc)
+      }
+    }
+  } else if (parent.type == 'serial') {
+    for (const key of Object.keys(dataBase.ia)) {
+      const item = dataBase.ia[key]
+      if (item.type == 'serial') {
         const cc: Tree = {
           type: 'interactive',
           label: item.name,
@@ -431,14 +464,24 @@ const tData = computed(() => {
     id: 'someip'
   }
 
+  const serial: Tree = {
+    type: 'serial',
+    label: 'Serial (USART)',
+    canAdd: false,
+    icon: usbIcon,
+    children: [],
+    id: 'serial'
+  }
+
   addChild(can)
   addChild(lin)
   addChild(eth)
   addChild(pwm)
   addChild(someip)
+  addChild(serial)
 
   // addChild(node)
-  return [can, lin, eth, someip, pwm, node, log, replay]
+  return [can, lin, eth, someip, pwm, serial, node, log, replay]
 })
 
 const defaultProps = {
@@ -535,6 +578,7 @@ function getDeviceName(device: UdsDevice): string {
   if (device.linDevice) return device.linDevice.name
   if (device.pwmDevice) return device.pwmDevice.name
   if (device.someipDevice) return device.someipDevice.name
+  if (device.serialDevice) return device.serialDevice.name
   return 'Device'
 }
 
@@ -1019,6 +1063,8 @@ watchEffect(() => {
         udsView.changeName(key, dataBase.devices[key].someipDevice.name)
       } else if (dataBase.devices[key].type == 'pwm' && dataBase.devices[key].pwmDevice) {
         udsView.changeName(key, dataBase.devices[key].pwmDevice.name)
+      } else if (dataBase.devices[key].type == 'serial' && dataBase.devices[key].serialDevice) {
+        udsView.changeName(key, dataBase.devices[key].serialDevice.name)
       }
     }
     // test nodes
@@ -1302,6 +1348,19 @@ function addNode(type: string, parent?: Tree) {
       }
       udsView.addIg(id, dataBase.ia[id])
       // add link
+      for (const key of devices) {
+        udsView.addLink(id, key)
+      }
+    } else if (parent?.type == 'serial') {
+      const devices: string[] = []
+      dataBase.ia[id] = {
+        name: i18next.t('uds.network.names.iaTemplate', { label: parent?.label }),
+        type: 'serial',
+        id: id,
+        devices: devices,
+        action: []
+      }
+      udsView.addIg(id, dataBase.ia[id])
       for (const key of devices) {
         udsView.addLink(id, key)
       }

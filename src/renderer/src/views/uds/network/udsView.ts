@@ -505,6 +505,8 @@ export class udsHardware extends udsCeil {
       type = 'soa'
     } else if (device.type == 'pwm' && device.pwmDevice) {
       name = device.pwmDevice.name
+    } else if (device.type == 'serial' && device.serialDevice) {
+      name = device.serialDevice.name
     }
 
     super(
@@ -890,6 +892,13 @@ export class UDSView {
         })
       } else if (item.type == 'someip') {
         this.layout.addWin('someipi', `${id}_ia`, {
+          name: item.name,
+          params: {
+            'edit-index': id
+          }
+        })
+      } else if (item.type == 'serial') {
+        this.layout.addWin('seriali', `${id}_ia`, {
           name: item.name,
           params: {
             'edit-index': id
