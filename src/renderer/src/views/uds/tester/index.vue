@@ -361,6 +361,26 @@ function buildTree() {
   }
   t.push(eth)
 
+  const serial: tree = {
+    label: 'Serial (USART)',
+    type: 'serial',
+    append: true,
+    id: 'SERIAL',
+    children: [],
+    disabled: false
+  }
+  for (const key in globalData.tester) {
+    if (globalData.tester[key].type == 'serial') {
+      serial.children?.push({
+        label: globalData.tester[key].name,
+        type: 'serial',
+        append: false,
+        id: key
+      })
+    }
+  }
+  t.push(serial)
+
   tData.value = t
 }
 

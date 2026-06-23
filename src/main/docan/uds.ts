@@ -101,6 +101,7 @@ import { LIN_ADDR_TYPE, LinMode } from '../share/lin'
 import { LDF } from 'src/renderer/src/database/ldfParse'
 import { DataSet, NodeItem } from 'src/preload/data'
 import { getJsPath } from '../util'
+import { SERIAL_TP, SERIAL_TP_SOCKET, TpError as SerialTpError } from '../serial'
 
 const NRCMsg: Record<number, string> = {
   0x10: 'General Reject',
@@ -265,6 +266,7 @@ export class UDSTesterMain {
   runningCanBase?: CanBase
   runningDoip?: DOIP
   runningLinBase?: LinBase
+  runningSerialTp?: SERIAL_TP
   varLog: VarLOG
   services: Record<string, ServiceItem> = {}
   constructor(
@@ -323,6 +325,10 @@ export class UDSTesterMain {
     this.runningLinBase = base
     this.closeBase = false
   }
+  setSerialTp(tp?: SERIAL_TP) {
+    this.runningSerialTp = tp
+    this.closeBase = false
+  }
   async runSequence(seqIndex: number, cycle?: number) {
     this.ac = new AbortController()
     const targetDevice = this.device
@@ -334,6 +340,8 @@ export class UDSTesterMain {
         instance = targetDevice.ethDevice.name
       } else if (targetDevice.type == 'lin' && targetDevice.linDevice) {
         instance = targetDevice.linDevice.name
+      } else if (targetDevice.type == 'serial' && targetDevice.serialDevice) {
+        instance = targetDevice.serialDevice.name
       } else {
         null
       }
@@ -429,6 +437,26 @@ export class UDSTesterMain {
             throw e
           }
         }
+      } else if (targetDevice.type == 'serial' && targetDevice.serialDevice) {
+        try {
+          if (this.runningSerialTp) {
+            await this.runSerialSequenceWithBase(
+              this.runningSerialTp,
+              seqIndex,
+              this.log,
+              cycleCount
+            )
+          } else {
+            throw new Error('serial tp not found')
+          }
+        } catch (e: any) {
+          if (this.ac.signal.aborted) {
+            null
+          } else {
+            this.log.error(this.tester.id, e.message, this.lastActiveTs)
+            throw e
+          }
+        }
       }
     } else {
       throw new Error('target device not found')
@@ -513,6 +541,35 @@ export class UDSTesterMain {
         },
         close: (base: boolean) => {
           tp.close(base)
+        },
+        setOption: (cmd: string, val: any) => {
+          null
+        }
+      },
+      seqIndex,
+      log,
+      cycleCount
+    )
+  }
+  private async runSerialSequenceWithBase(
+    tp: SERIAL_TP,
+    seqIndex: number,
+    log: UdsLOG,
+    cycleCount: number
+  ) {
+    await this.runTp(
+      {
+        createSocket: async (addr: UdsAddress) => {
+          if (addr.serialAddr == undefined) {
+            throw new Error('serial address not found')
+          }
+          if (this.ac.signal.aborted) {
+            throw new Error('aborted')
+          }
+          return new SERIAL_TP_SOCKET(tp, addr.serialAddr)
+        },
+        close: (base: boolean) => {
+          if (base) tp.close()
         },
         setOption: (cmd: string, val: any) => {
           null

@@ -515,6 +515,34 @@
           />
         </el-tab-pane>
       </el-tabs>
+      <el-tabs
+        v-else-if="props.type == 'serial'"
+        v-model="activeTabName"
+        tab-position="left"
+        style="height: 100%"
+        closable
+        @tab-remove="removeTab"
+      >
+        <el-tab-pane v-for="(item, index) in data.address" :key="index" :name="`index${index}`">
+          <template #label>
+            <span class="custom-tabs-label">
+              <span
+                :class="{
+                  addrError: errors[index]
+                }"
+                >{{ getAddrName(item, index) }}</span
+              >
+            </span>
+          </template>
+          <SerialAddrVue
+            v-if="data.address[index].serialAddr"
+            :ref="(e) => (addrRef[index] = e)"
+            v-model="data.address[index].serialAddr"
+            :index="index"
+            :addrs="data.address"
+          />
+        </el-tab-pane>
+      </el-tabs>
     </div>
     <el-divider />
 
@@ -597,6 +625,7 @@ import Handlebars from 'handlebars'
 import copyIcon from '@iconify/icons-material-symbols/content-copy'
 import EthAddr from './ethAddr.vue'
 import LinAddr from './linAddr.vue'
+import SerialAddrVue from './serialAddr.vue'
 import { LIN_ADDR_TYPE, LIN_SCH_TYPE } from 'nodeCan/lin'
 import dbchoose from './dbchoose.vue'
 import { useGlobalStart } from '@r/stores/runtime'
@@ -721,6 +750,8 @@ function getAddrName(item: UdsAddress, index: number) {
     return item.ethAddr?.name
   } else if (item.type == 'lin') {
     return item.linAddr?.name
+  } else if (item.type == 'serial') {
+    return item.serialAddr?.name
   }
   return `Addr${index}`
 }
@@ -991,6 +1022,25 @@ function addCanAddress() {
         nAs: 1000,
         nCr: 1000,
         schType: LIN_SCH_TYPE.DIAG_ONLY
+      }
+    })
+  } else if (props.type == 'serial') {
+    data.value.address.push({
+      type: 'serial',
+      serialAddr: {
+        name: `Addr${data.value.address.length}`,
+        nAs: 1000,
+        nAr: 1000,
+        nBs: 1000,
+        nBr: 0,
+        nCs: 0,
+        nCr: 1000,
+        stMin: 0,
+        bs: 0,
+        maxWTF: 0,
+        padding: false,
+        paddingValue: 0xcc,
+        maxFrameSize: 7
       }
     })
   }

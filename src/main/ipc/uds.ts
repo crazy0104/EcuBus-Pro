@@ -38,7 +38,7 @@ import { getParamBuffer, getTxPdu, UdsAddress, UdsDevice } from '../share/uds'
 import { TesterInfo } from '../share/tester'
 import log from 'electron-log'
 import Transport from 'winston-transport'
-import { addDeviceTransport, removeDeviceTransport, UdsLOG, VarLOG } from '../log'
+import { addDeviceTransport, removeDeviceTransport, UdsLOG, VarLOG, SerialLOG } from '../log'
 import { clientTcp, DOIP, getEthDevices } from './../doip'
 import { EthAddr, EthBaseInfo } from '../share/doip'
 import { createPwmDevice, getValidPwmDevices, PwmBase } from '../pwm'
@@ -86,6 +86,8 @@ import Replay, { ReplayReader } from '../replay'
 import { BlfReader } from '../replay/blfReader'
 import { AscReader } from '../replay/ascReader'
 import { trackEvent } from '../analytics'
+import { SERIAL_TP, TpError as SerialTpError } from '../serial'
+import { SerialBaseInfo } from '../share/serial'
 
 const libPath = path.dirname(dllLib)
 
@@ -292,6 +294,7 @@ const ethBaseMap = new Map<string, EthBaseInfo>()
 const linBaseMap = new Map<string, LinBase>()
 const pwmBaseMap = new Map<string, PwmBase>()
 const someipMap = new Map<string, VSomeIP_Client>()
+const serialTpMap = new Map<string, SERIAL_TP>()
 const udsTesterMap = new Map<string, UDSTesterMain>()
 const nodeMap = new Map<string, NodeItemA>()
 const ortiMap = new Map<string, TraceItem>()
@@ -318,6 +321,9 @@ function getDeviceSymbol(data: UdsDevice) {
       break
     case 'someip':
       vendor = 'pc'
+      break
+    case 'serial':
+      vendor = 'serial'
       break
     default:
       break
@@ -466,6 +472,24 @@ async function globalStart(data: DataSet, projectInfo: { path: string; name: str
         })
 
         someipMap.set(key, client)
+      } else if (device.type == 'serial' && device.serialDevice) {
+        channleList.push(device.serialDevice.id)
+        const serialDevice = device.serialDevice
+        activeKey = serialDevice.name
+        const serialTp = new SERIAL_TP(serialDevice)
+        serialTp.serialLog = new SerialLOG(serialDevice.name, key)
+        await serialTp.open()
+        sysLog.info(`start serial device ${serialDevice.device.handle} success`)
+        serialTp.event.on('close', () => {
+          serialTp.event.removeAllListeners()
+          sysLog.error(`${serialDevice.device.handle} closed unexpectedly`)
+          globalStop(true)
+        })
+        serialTp.event.on('error', (err: Error) => {
+          sysLog.error(`${serialDevice.device.handle} error: ${err.message}`)
+          globalStop(true)
+        })
+        serialTpMap.set(key, serialTp)
       }
     }
   } catch (err: any) {
@@ -595,6 +619,9 @@ async function globalStart(data: DataSet, projectInfo: { path: string; name: str
           cantps.push(lintp)
         }
       }
+    } else if (tester.type == 'serial') {
+      // Serial TP frames are handled directly inside SERIAL_TP.parseFrames()
+      // No additional wiring needed here
     }
   }
   //
@@ -956,6 +983,15 @@ export function globalStop(emit = false) {
   stopRouterCounter()
   someipMap.clear()
 
+  serialTpMap.forEach((value) => {
+    value.serialLog?.close()
+    value.close()
+  })
+  serialTpMap.clear()
+
+  serialIaTimerMap.forEach((timer) => clearInterval(timer))
+  serialIaTimerMap.clear()
+
   ortiMap.forEach((value) => {
     value.close()
   })
@@ -1070,6 +1106,18 @@ ipcMain.handle('ipc-run-sequence', async (event, ...arg) => {
         } else {
           throw new Error(
             `lin device ${device.linDevice.vendor}-${device.linDevice.device.handle} not found`
+          )
+        }
+      } else if (device.type == 'serial' && device.serialDevice) {
+        const id = device.serialDevice.id
+        const serialTp = serialTpMap.get(id)
+        if (serialTp) {
+          uds.setSerialTp(serialTp)
+          udsTesterMap.set(tester.id, uds)
+          await uds.runSequence(seqIndex, cycle)
+        } else {
+          throw new Error(
+            `serial device ${device.serialDevice.device.handle} not found or not started`
           )
         }
       }
@@ -1384,6 +1432,54 @@ ipcMain.on('ipc-stop-can-period', (event, ...arg) => {
     }
     timer.socket.close()
     timerMap.delete(id)
+  }
+})
+
+const serialIaTimerMap = new Map<string, NodeJS.Timeout>()
+
+ipcMain.on('ipc-send-serial', (event, ...arg) => {
+  const ia = arg[0] as { channel: string; canId: string; data: string[] }
+  const serialTp = serialTpMap.get(ia.channel)
+  if (serialTp) {
+    const canId = parseInt(ia.canId || '0', 16)
+    const data = Buffer.from(ia.data.map((d) => parseInt(d, 16)))
+    serialTp.sendCanFrame(canId, data).catch((e) => sysLog.error('ipc-send-serial error:', e))
+  } else {
+    sysLog.error('serial device not found or not started')
+  }
+})
+
+ipcMain.on('ipc-send-serial-period', (event, ...arg) => {
+  const id = arg[0] as string
+  const ia = arg[1] as {
+    channel: string
+    canId: string
+    data: string[]
+    trigger: { period?: number }
+  }
+  const serialTp = serialTpMap.get(ia.channel)
+  if (serialTp) {
+    const existing = serialIaTimerMap.get(id)
+    if (existing) clearInterval(existing)
+    const canId = parseInt(ia.canId || '0', 16)
+    const data = Buffer.from(ia.data.map((d) => parseInt(d, 16)))
+    const timer = setInterval(() => {
+      serialTp
+        .sendCanFrame(canId, data)
+        .catch((e) => sysLog.error('ipc-send-serial-period error:', e))
+    }, ia.trigger.period || 100)
+    serialIaTimerMap.set(id, timer)
+  } else {
+    sysLog.error('serial device not found or not started')
+  }
+})
+
+ipcMain.on('ipc-stop-serial-period', (event, ...arg) => {
+  const id = arg[0] as string
+  const timer = serialIaTimerMap.get(id)
+  if (timer) {
+    clearInterval(timer)
+    serialIaTimerMap.delete(id)
   }
 })
 

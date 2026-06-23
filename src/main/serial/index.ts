@@ -14,6 +14,7 @@ export interface SerialFrameLogger {
     name: string
     canId?: number
   }): void
+  close(): void
 }
 
 export enum SERIAL_TP_ERROR_ID {

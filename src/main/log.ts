@@ -806,6 +806,44 @@ export class PluginLOG {
   }
 }
 
+export class SerialLOG {
+  log: Logger
+  deviceId: string
+
+  constructor(instance: string, deviceId: string) {
+    this.deviceId = deviceId
+    const et1 = externalTransport.map((t) => t.t())
+    const dt1 = deviceTransport.map((t) => t.t())
+    this.log = createLogger({
+      transports: [new Base(), ...et1, ...dt1],
+      format: format.combine(
+        format.json(),
+        instanceFormat({ instance }),
+        format.label({ label: 'Serial' }),
+        ...externalFormat
+      )
+    })
+    const combinedLogs = this.log.transports.filter((transport) => {
+      return (transport as any).devices && (transport as any).devices.indexOf(this.deviceId) == -1
+    })
+    for (const log of combinedLogs) {
+      this.log.remove(log)
+    }
+  }
+
+  serialBase(data: { dir: 'TX' | 'RX'; data: Buffer; ts: number; name: string; canId?: number }) {
+    this.log.debug({
+      method: 'serialBase',
+      deviceId: this.deviceId,
+      data
+    })
+  }
+
+  close() {
+    this.log.close()
+  }
+}
+
 export class ReplayLOG {
   log: Logger
   closeFlag = false

@@ -224,6 +224,8 @@ function getName(device: UdsDevice) {
     return device.ethDevice?.name
   } else if (device.type == 'lin') {
     return device.linDevice?.name
+  } else if (device.type == 'serial') {
+    return device.serialDevice?.name
   } else {
     return ''
   }
@@ -235,6 +237,8 @@ function getVendor(device: UdsDevice) {
     return device.ethDevice?.vendor.toLocaleUpperCase()
   } else if (device.type == 'lin') {
     return device.linDevice?.vendor.toLocaleUpperCase()
+  } else if (device.type == 'serial') {
+    return 'SERIAL'
   } else {
     return ''
   }
