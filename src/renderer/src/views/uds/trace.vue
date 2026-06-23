@@ -544,6 +544,8 @@ const allInstanceList = computed(() => {
       list.push(item.linDevice.name)
     } else if (item.type == 'eth' && item.ethDevice) {
       list.push(item.ethDevice.name)
+    } else if (item.type == 'serial' && item.serialDevice) {
+      list.push(item.serialDevice.name)
     }
   }
   return list
@@ -632,6 +634,17 @@ interface OsErrorLog {
   ts: number
 }
 
+interface SerialBaseLog {
+  method: 'serialBase'
+  data: {
+    dir: 'TX' | 'RX'
+    data: Uint8Array
+    ts: number
+    name: string
+    canId?: number
+  }
+}
+
 interface LogItem {
   message:
     | CanBaseLog
@@ -644,6 +657,7 @@ interface LogItem {
     | SomeipServiceValidLog
     | OsEventLog
     | OsErrorLog
+    | SerialBaseLog
   level: string
   instance: string
   label: string
@@ -1148,6 +1162,24 @@ function logDisplay({ values }: { values: LogItem[] }) {
           msgType: i18next.t('uds.trace.messageTypes.osError')
         })
       }
+    } else if (val.message.method == 'serialBase') {
+      const serialData = val.message.data
+      const canIdStr =
+        serialData.canId != null
+          ? `0x${serialData.canId.toString(16).toUpperCase().padStart(3, '0')}`
+          : ''
+      insertData({
+        method: val.message.method,
+        dir: serialData.dir == 'TX' ? 'Tx' : 'Rx',
+        data: data2str(serialData.data),
+        ts: serialData.ts,
+        id: canIdStr,
+        len: serialData.data.length,
+        device: val.label,
+        channel: val.instance,
+        msgType: 'SERIAL',
+        name: serialData.name || ''
+      })
     }
   }
 }
@@ -1171,12 +1203,12 @@ const props = defineProps({
   },
   defaultCheckList: {
     type: Array as PropType<string[]>,
-    default: () => ['canBase', 'ipBase', 'linBase', 'uds', 'someipBase', 'osTrace']
+    default: () => ['canBase', 'ipBase', 'linBase', 'uds', 'someipBase', 'osTrace', 'serialBase']
   }
 })
 
 function filterChange(
-  method: 'uds' | 'canBase' | 'ipBase' | 'linBase' | 'someipBase' | 'osTrace',
+  method: 'uds' | 'canBase' | 'ipBase' | 'linBase' | 'someipBase' | 'osTrace' | 'serialBase',
   val: boolean
 ) {
   const i = LogFilter.value.find((v) => v.v == method)
@@ -1962,7 +1994,7 @@ function togglePause() {
 const LogFilter = ref<
   {
     label: string
-    v: 'uds' | 'canBase' | 'ipBase' | 'linBase' | 'someipBase' | 'osTrace'
+    v: 'uds' | 'canBase' | 'ipBase' | 'linBase' | 'someipBase' | 'osTrace' | 'serialBase'
     value: string[]
   }[]
 >([
@@ -1995,6 +2027,11 @@ const LogFilter = ref<
     label: i18next.t('uds.trace.filters.osTrace'),
     v: 'osTrace',
     value: ['osEvent', 'osError']
+  },
+  {
+    label: 'Serial',
+    v: 'serialBase',
+    value: ['serialBase']
   }
 ])
 
@@ -2245,6 +2282,7 @@ onMounted(() => {
         switch (method) {
           case 'canBase':
           case 'linBase':
+          case 'serialBase':
             color = getComputedStyle(document.documentElement)
               .getPropertyValue('--el-color-primary')
               .trim()
