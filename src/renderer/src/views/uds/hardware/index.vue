@@ -545,7 +545,7 @@ async function buildTree() {
 
   // Serial port devices (not vendor-specific)
   const serialTree: tree = {
-    label: 'Serial Port (USART)',
+    label: 'SerialPort',
     vendor: 'simulate' as CanVendor,
     append: true,
     id: 'SERIAL',

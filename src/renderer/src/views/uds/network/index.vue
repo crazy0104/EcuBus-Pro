@@ -466,7 +466,7 @@ const tData = computed(() => {
 
   const serial: Tree = {
     type: 'serial',
-    label: 'Serial (USART)',
+    label: 'SerialPort',
     canAdd: false,
     icon: usbIcon,
     children: [],

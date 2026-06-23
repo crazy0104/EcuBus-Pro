@@ -362,7 +362,7 @@ function buildTree() {
   t.push(eth)
 
   const serial: tree = {
-    label: 'Serial (USART)',
+    label: 'SerialPort',
     type: 'serial',
     append: true,
     id: 'SERIAL',
